@@ -61,8 +61,7 @@ class BombSpot():
                 print('\nValid input must be numerical')
 
     def setTotalRounds(self):
-        playable_width = 0
-        playable_height = 0
+        playable_width, playable_height = 0, 0
         if self.loc_x < self.bomb_x:
             playable_width = self.x - self.loc_x
         if self.loc_x > self.bomb_x:
@@ -71,7 +70,10 @@ class BombSpot():
             playable_height = self.x - self.loc_y
         if self.loc_y > self.bomb_y:
             playable_height = self.loc_y
-        return math.ceil(math.log2(max(playable_width, playable_height)))
+        binary_search_complexity = math.ceil(math.log2(max(playable_width, playable_height)))
+        if binary_search_complexity == 0: 
+        	binary_search_complexity = 1
+        return binary_search_complexity
 
     def foundBomb(self):
         if self.loc_x == self.bomb_x and self.loc_y == self.bomb_y:
