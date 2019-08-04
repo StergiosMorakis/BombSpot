@@ -70,10 +70,10 @@ class BombSpot():
             playable_height = self.x - self.loc_y
         if self.loc_y > self.bomb_y:
             playable_height = self.loc_y
-        binary_search_complexity = math.ceil(math.log2(max(playable_width, playable_height)))
-        if binary_search_complexity == 0: 
-        	binary_search_complexity = 1
-        return binary_search_complexity
+        ttl_rounds = math.ceil(math.log2(max(playable_width, playable_height)))
+        if ttl_rounds == 0: 
+        	ttl_rounds = 1
+        return ttl_rounds
 
     def foundBomb(self):
         if self.loc_x == self.bomb_x and self.loc_y == self.bomb_y:
