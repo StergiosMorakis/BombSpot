@@ -5,243 +5,192 @@ import shutil
 
 class BombSpot():
 
-    def __init__(self):
-        self.startGame()
-
-    def startGame(self):
-        os.system('cls')
-        self.visited_rooms = []
-        self.y = self.setHeight()
-        self.x = self.setWidth()
-        self.loc_x = random.randint(1, self.x)
-        self.loc_y = random.randint(1, self.y)
-        self.visited_rooms.append(self.x * (self.loc_y - 1) + self.loc_x - 1)
+    def __init__(self, width: int, height: int):
+        self.height = height
+        self.width = width
+        # set random player position
+        self.pos_x = random.randint(1, self.width)
+        self.pos_y = random.randint(1, self.height)
+        # visited positions
+        # bottom-left: pos 0
+        # top-right: pos width*height-1
+        self.tabu_list = []
+        self.tabu_list.append(self.width*(self.pos_y)+self.pos_x)
+        # set random bomb position
         while True:
-            self.bomb_x = random.randint(1, self.x)
-            self.bomb_y = random.randint(1, self.y)
-            if self.loc_x != self.bomb_x or self.loc_y != self.bomb_y:
+            self.bomb_x = random.randint(1, self.width)
+            self.bomb_y = random.randint(1, self.height)
+            if self.pos_x!=self.bomb_x or self.pos_y!=self.bomb_y:
                 break
-        self.round = 0
-        self.total_rounds = self.setTotalRounds()
-        os.system('cls')
-        self.introMessage()
-        while(not self.foundBomb()):
-            os.system('cls')
-            self.round += 1
-            if self.round > self.total_rounds:
-                self.loseMessage()
-            self.printBuilding()
-            self.getCurrentLocation()
-            self.indicateBombLocation()
-            self.makeMove()
+        # set timer
+        self.curr_round = 0
+        self.round_limit = self.calc_worst_case_rounds()
 
-    def setHeight(self):
-        while True:
-            try:
-                print('\nInsert number of Floors:')
-                height = int(input())
-                # The Burj Khalifa, located in Dubai, UAE, is the building with the most floors, at 163.
-                if height > 0 and height < 164:
-                    return height
-                else:
-                    print('\nValid input consists of characters 1, 2, ..., 164')
-            except ValueError:
-                print('\nValid input must be numerical')
+    def start(self):
+        input('Earlier this morning, we received a call about a planted bomb in this building.\nYour mission is to defuse it within {} round{}.\nWe depend on you!'.format(self.round_limit, 's' if self.round_limit>1 else ''))
+        while(not self.bomb_spotted()):
+            self.curr_round+=1
+            if self.curr_round>self.round_limit:
+                break
+            self.print_all()
+            self.make_move()
+        self.end_game(self.bomb_spotted())
 
-    def setWidth(self):
-        while True:
-            try:
-                print('\nInsert number of Rooms per floor:')
-                width = int(input())
-                if width > 1 and width <= 250:
-                    return width
-                else:
-                    print('\nValid input consists of characters 2, 3, ..., 250')
-            except ValueError:
-                print('\nValid input must be numerical')
+    def make_move(self):
+        '''
+            Gets input for new position
+        '''
+        make_move_dict = {
+            'pos_y': {'text': '> Move to floor No.:\n', 'limit': 'height'},
+            'pos_x': {'text': '> Move to room No.:\n', 'limit': 'width'},
+        }
+        for key, val in make_move_dict.items():
+            if getattr(self, val['limit'])==1:
+                continue
+            while True:
+                try:
+                    entry = int(input(val['text']))
+                    if 0<entry<=getattr(self, val['limit']):
+                        setattr(self, key, entry)
+                        break
+                    else:
+                        print('Error - Input not in range 1, {}{}'.format( \
+                            '' if getattr(self, val['limit'])==2 \
+                                else '2, ' if getattr(self, val['limit'])==3 \
+                                else '2, 3, ' if getattr(self, val['limit'])==4 \
+                                else '..., ', \
+                            getattr(self, val['limit'])))
+                except ValueError:
+                    print('Error - Non-numerical value')
+        if not self.bomb_spotted():
+            # Add to tabu list
+            self.tabu_list.append(self.width*(self.pos_y)+self.pos_x)
 
-    def setTotalRounds(self):
-        playable_width, playable_height = 0, 0
-        if self.loc_x < self.bomb_x:
-            playable_width = self.x - self.loc_x
-        if self.loc_x > self.bomb_x:
-            playable_width = self.loc_x
-        if self.loc_y < self.bomb_y:
-            playable_height = self.x - self.loc_y
-        if self.loc_y > self.bomb_y:
-            playable_height = self.loc_y
-        ttl_rounds = math.ceil(math.log2(max(playable_width, playable_height)))
-        if ttl_rounds == 0: 
-        	ttl_rounds = 1
+    def bomb_spotted(self):
+        '''
+            Returns: True if player position is equal to bomb position
+        '''
+        return self.pos_x==self.bomb_x and self.pos_y==self.bomb_y
+
+    def calc_worst_case_rounds(self):
+        '''
+            Binary Search: O(logn)
+            Returns: highest log of distance between player position and edge closest to bomb position
+        '''
+        availabe_w = self.width-self.pos_x+1 if self.pos_x < self.bomb_x else self.pos_x if self.pos_x > self.bomb_x else 0
+        availabe_h = self.width-self.pos_y+1 if self.pos_y < self.bomb_y else self.pos_y if self.pos_y > self.bomb_y else 0
+        ttl_rounds = math.ceil(math.log2(max(availabe_w, availabe_h)))
         return ttl_rounds
 
-    def foundBomb(self):
-        if self.loc_x == self.bomb_x and self.loc_y == self.bomb_y:
-            return True
-        else:
-            return False
+    def get_building(self):
+        # rooftop
+        output=self.get_rooftop()
+        # building blocks
+        for floor in range(self.height):
+            output.extend(self.get_floor(floor))
+        # ground floor
+        output += self.get_ground_floor()
+        return output
 
-    def printBuilding(self):
-        output = [' ', ' ', 'Round ' + str(self.round), ' ', ' '] 
-        output.extend(self.getRooftop())
-        for floor in range(self.y):
-            output.extend(self.getRoomsPerFloor(floor))
-        output += self.getGroundFloor()
-        for line in output:
+    def get_rooftop(self):
+        '''
+            Returns: list of 3 string lines for rooftop
+        '''
+        return [self.width*('   /.\\   ')
+            , self.width*('_'+2*'_||'+'__')
+            , '||'+'x'*(self.width*9)+'||'
+        ]
+
+    def get_floor(self, floor: int):
+        '''
+            Returns: list of 4 string lines representing a floor
+        '''
+        window_symbols = {'current': '*', 'visited': ' ', 'not_visited': '?'}
+        get_window_symbol = lambda y, x: window_symbols['current'] if self.height-y==self.pos_y and x+1==self.pos_x else \
+                                         window_symbols['visited'] if self.width*(self.height-y)+x+1 in self.tabu_list else \
+                                         window_symbols['not_visited']
+        # window line w/ chars
+        window_str=''.join(['xx| {} |xx'.format(get_window_symbol(floor, room)) for room in range(self.width)])
+        return ['||'+self.width*'xx// \\\\xx'+'||'
+            , len('    Floor No.{}'.format(self.height-floor))*' '+'||'+window_str+'||    Floor No.{}'.format(self.height-floor)
+            , '||'+self.width*'xx\\\\ //xx'+'||'
+            , '||'+'x'*(self.width*9)+'||'
+        ]
+
+    def get_ground_floor(self):
+        '''
+            Returns: list of 4 string lines for ground floor
+        '''
+        door=['///\\\\\\', '|    |', '|   o|', '|    |']
+        return ['||'+door[i].rjust(self.width*7,'x')+self.width*2*'x'+'||' for i in range(4)]
+
+    def print_all(self):
+        '''
+            Display necessary information per round
+        '''
+        # print round number
+        print('Round {}\n'.format(self.curr_round).center(shutil.get_terminal_size().columns))
+        # print building blocks
+        for line in self.get_building():
             print(line.center(shutil.get_terminal_size().columns), end="")
+        # print current location Floor-Room
+        print('\nCurrent location: Room \"{0}-{1}\"\nThis room looks empty...'.format(self.pos_y, self.pos_x).center(shutil.get_terminal_size().columns))
+        # print indication towards bomb position
+        indication_on_y, indication_on_x = self.get_bomb_indication()
+        print('\nIndicator reacts intensively towards{}{}\n'.format(indication_on_y, indication_on_x).center(shutil.get_terminal_size().columns))
 
-    def getRooftop(self):
-        output = []
-        output.append(self.x * ('   /.\\   '))
-        output.append(self.x * ('_'+ 2 * '_||'+'__'))
-        output.append('||' + 'x' * (self.x * 9) + '||')
-        return output
+    def get_bomb_indication(self):
+        '''
+            Returns: tuple w/ indication strings towards bomb on both axes
+        '''
+        return (
+            ' Up' if self.pos_y < self.bomb_y else ' Down' if self.pos_y > self.bomb_y else '',
+            ' Right' if self.pos_x < self.bomb_x else ' Left' if self.pos_x > self.bomb_x else '',
+        )
 
-    def getRoomsPerFloor(self, floor):
-        
-        def getRoomSymbol(floor, room):
-            if self.y - floor == self.loc_y and room + 1 == self.loc_x:
-                return '*'
-            elif self.x * (self.y - floor - 1) + room in self.visited_rooms:
-                return ' '
-            else:
-                return '?'
+    def end_game(self, win: bool):
+        '''
+            Ending scene
+        '''
+        os.system('cls')
+        input('Bomb spotted and defused!' if win else 'The bomb has exploded!')
+        input('You have saved many lives today.\nGood job!' if win  else 'Many lives were lost today.\nAnd it was all your fault!')
 
-        output = []
-        floor_string = ''
-        output.append('||' + self.x * 'xx// \\\\xx'  + '||')
-        for room in range(self.x):
-            floor_string += 'xx| {} |xx'.format(getRoomSymbol(floor, room))
-        output.append(len('    Floor No.' + str(self.y - floor)) * ' ' +'||' + floor_string + '||    Floor No.' + str(self.y - floor))
-        output.append('||' + self.x * 'xx\\\\ //xx' + '||')
-        output.append('||' + 'x' * (self.x * 9) + '||')
-        return output
-
-    def getGroundFloor(self):
-
-        def getDoor(line):
-            switch = {
-                0: '///\\\\\\',
-                1: '|    |',
-                2: '|   o|',
-                3: '|    |',
-            }
-            return switch.get(line)
-
-        output = []
-        for line in range(4):
-            output.append('||' + getDoor(line).rjust(self.x * 7, 'x') + self.x * 2 * 'x' + '||')
-        return output
-    
-    def getCurrentLocation(self):
-        print('\n')
-        print('Current Location: Room \"{0}-{1}\"'.format(self.loc_y, self.loc_x).center(shutil.get_terminal_size().columns))
-
-    def indicateBombLocation(self):
-        print('\n')
-        print('Indicator reacts intensively towards{0}{1}'.format(self.getBombY(), self.getBombX()).center(shutil.get_terminal_size().columns))
-
-    def getBombX(self):
-        if self.loc_x < self.bomb_x:
-            return ' Right'
-        elif self.loc_x > self.bomb_x:
-            return ' Left'
-        else:
-            return ''
-
-    def getBombY(self):
-        if self.loc_y < self.bomb_y:
-            return ' Up'
-        elif self.loc_y > self.bomb_y:
-            return ' Down'
-        else:
-            return ''
-
-    def makeMove(self):
-        self.loc_y = self.setLocY()
-        self.loc_x = self.setLocX()
-        if not self.foundBomb():
-            self.visited_rooms.append(self.x * (self.loc_y - 1) + self.loc_x - 1)
-            print('\nRoom \"{0}-{1}\" seems empty..'.format(self.loc_y, self.loc_x))
-        else:
-            self.winMessage()
-
-    def setLocX(self):
+def get_dimensions_input():
+    '''
+        Get input from user for board dimensions
+    '''
+    dimensions_dict = {
+        'height': {'text': '> Insert number of floors:\n', 'range': (0,50)},
+        'width': {'text': '> Insert number of rooms per floor:\n', 'range': (1,150)},
+    }
+    for key, val in dimensions_dict.items():
         while True:
             try:
-                print('\nMove to Room No.')
-                entry = int(input())
-                if entry > 0 and entry <= self.x:
-                    return entry
+                size = int(input(val['text']))
+                if val['range'][0]<size<val['range'][1]:
+                    dimensions_dict[key]['length']=size
+                    break
                 else:
-                    print('\nValid input consists of characters 1, 2, ..., {}'.format(self.x))
+                    print('Error - Input not in range {}, {}, ..., {}'.format(val['range'][0], val['range'][0]+1, val['range'][1]))
             except ValueError:
-                print('\nValid input must be numerical')
+                print('Error - Non-numerical value')
+    return (dimensions_dict['width']['length'], dimensions_dict['height']['length'])
 
-    
-    def setLocY(self):
-        while True:
-            try:
-                print('\nMove to Floor No.')
-                entry = int(input())
-                if entry > 0 and entry <= self.y:
-                    return entry
-                else:
-                    print('\nValid input consists of characters 1, 2, ..., {}'.format(self.y))
-            except ValueError:
-                print('\nValid input must be numerical')
-    
-    def introMessage(self):
-        print('There is a bomb in this building..')
-        input()
-        print('We need you to find it..')
-        input()
-        print('You \'ve got {} rounds to locate it..'.format(str(self.total_rounds)))
-        input()
-        print('We depend on you, soldier!')
-        input()
-        print('Do you understand?')
-        input()
-
-    def winMessage(self):
-        os.system('cls')
-        print('The bomb has been defused!')
-        input()
-        print('You have saved many lives today, soldier..')
-        input()
-        print('Thank you!')
-        input()
-        self.playAgain()
-
-    def loseMessage(self):
-        os.system('cls')
-        print('The bomb has exploded!')
-        input()
-        print('Many lives have been lost today..')
-        input()
-        print('All because of you, soldier!')
-        input()
-        self.playAgain()
-
-        
-    def playAgain(self):
-        while True:
-            print('\nPlay again? (Y / N)')
-            answer = input().upper() 
-            if answer in ['Y', 'YE', 'YES', 'YEAH']:
-                self.startGame()
-            elif answer in ['N', 'NO', 'NOPE']:
-                print('\nAre you sure? (Y / N)')
-                answer = input().upper() 
-                if answer in ['Y', 'YE', 'YES', 'YEAH']:
-                    os.system('cls')
-                    quit()
-                elif answer in ['N', 'NO', 'NOPE']:
-                    print('\nYou don \'t make any sense, soldier!')
-                else:
-                    print('\nDidn \'t quite catch that..')
+if __name__ =='__main__':
+    os.system('cls')
+    width_input, height_input = get_dimensions_input()
+    BombSpot(width_input, height_input).start()
+    while True:
+        ans = input('Play again? (Y / N)\n').lower()
+        if ans=='y':
+            BombSpot(width_input, height_input).start()
+        elif ans=='n':
+            confirm = input('Are you sure? (Y / N)\n').lower() 
+            if confirm=='y':
+                os.system('cls')
+                quit()
             else:
-                print('\nDidn \'t catch that..')
-
-if (__name__ =='__main__'):
-    init_game = BombSpot()
+                print('You don\'t make any sense!')
+        else:
+            print('Error - Invalid input')
