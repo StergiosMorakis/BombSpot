@@ -27,7 +27,7 @@ class BombSpot():
         self.round_limit = self.calc_worst_case_rounds()
 
     def start(self):
-        input('Earlier this morning, we received a call about a planted bomb in this building.\n' + \
+        input('We have information a bomb is planted in this building.\n' + \
               'Your mission is to defuse it within {} round{}.\nWe depend on you!'.format(self.round_limit, 's' if self.round_limit>1 else ''))
         while(not self.bomb_spotted()):
             self.curr_round+=1
